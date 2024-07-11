@@ -150,44 +150,56 @@ namespace Renci.SshNet.Abstractions
 
         public static void ReadContinuous(Socket socket, byte[] buffer, int offset, int size, Action<byte[], int, int> processReceivedBytesAction)
         {
-            // do not time-out receive
-            socket.ReceiveTimeout = 0;
-
-            while (socket.Connected)
+            // Since socket is set to null on a different thread it is possible that it is null here
+            try
             {
-                try
+                // do not time-out receive
+                if (socket is not null)
                 {
-                    var bytesRead = socket.Receive(buffer, offset, size, SocketFlags.None);
-                    if (bytesRead == 0)
-                    {
-                        break;
-                    }
-
-                    processReceivedBytesAction(buffer, offset, bytesRead);
+                    socket.ReceiveTimeout = 0;
                 }
-                catch (SocketException ex)
+
+                while (socket is not null && socket.Connected)
                 {
-                    if (IsErrorResumable(ex.SocketErrorCode))
+                    try
                     {
-                        continue;
+                        var bytesRead = socket.Receive(buffer, offset, size, SocketFlags.None);
+                        if (bytesRead == 0)
+                        {
+                            break;
+                        }
+
+                        processReceivedBytesAction(buffer, offset, bytesRead);
                     }
+                    catch (SocketException ex)
+                    {
+                        if (IsErrorResumable(ex.SocketErrorCode))
+                        {
+                            continue;
+                        }
 
 #pragma warning disable IDE0010 // Add missing cases
-                    switch (ex.SocketErrorCode)
-                    {
-                        case SocketError.ConnectionAborted:
-                        case SocketError.ConnectionReset:
-                            // connection was closed
-                            return;
-                        case SocketError.Interrupted:
-                            // connection was closed because FIN/ACK was not received in time after
-                            // shutting down the (send part of the) socket
-                            return;
-                        default:
-                            throw; // throw any other error
-                    }
+                        switch (ex.SocketErrorCode)
+                        {
+                            case SocketError.ConnectionAborted:
+                            case SocketError.ConnectionReset:
+                                // connection was closed
+                                return;
+                            case SocketError.Interrupted:
+                                // connection was closed because FIN/ACK was not received in time after
+                                // shutting down the (send part of the) socket
+                                return;
+                            default:
+                                throw; // throw any other error
+                        }
 #pragma warning restore IDE0010 // Add missing cases
+                    }
                 }
+            }
+            catch (NullReferenceException)
+            {
+                // socket was closed, disposed and set to null before the read was started
+                return;
             }
         }
 
