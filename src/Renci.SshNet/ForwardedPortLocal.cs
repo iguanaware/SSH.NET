@@ -359,7 +359,7 @@ namespace Renci.SshNet
 
         private static void CloseClientSocket(Socket clientSocket)
         {
-            if (clientSocket.Connected)
+            if (clientSocket is not null && clientSocket.Connected)
             {
                 try
                 {
@@ -371,7 +371,7 @@ namespace Renci.SshNet
                 }
             }
 
-            clientSocket.Dispose();
+            clientSocket?.Dispose();
         }
 
         /// <summary>
